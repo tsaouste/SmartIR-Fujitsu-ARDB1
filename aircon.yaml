@@ -48,10 +48,6 @@ globals:
     type: bool
     restore_value: no
     initial_value: 'false'
-  - id: fujitsu_ardb1_command
-    type: std::string
-    restore_value: no
-    initial_value: '""'
   - id: fujitsu_ardb1_mode
     type: std::string
     restore_value: no
@@ -60,10 +56,6 @@ globals:
     type: std::string
     restore_value: no
     initial_value: '""'
-  - id: fujitsu_ardb1_swing_mode
-    type: std::string
-    restore_value: no
-    initial_value: '"off"'
   - id: fujitsu_ardb1_temperature
     type: int
     restore_value: no
@@ -116,10 +108,8 @@ remote_receiver:
 
           id(fujitsu_ardb1_valid) = false;
           id(fujitsu_ardb1_off) = false;
-          id(fujitsu_ardb1_command).clear();
           id(fujitsu_ardb1_mode).clear();
           id(fujitsu_ardb1_fan).clear();
-          id(fujitsu_ardb1_swing_mode) = "off";
           id(fujitsu_ardb1_temperature) = 0;
 
           // AR-DB1 carries LSB-first data in the long/short spaces.  A full
@@ -137,14 +127,9 @@ remote_receiver:
           const bool header_ok = usable_bits >= 48 &&
               bytes[0] == 0x14 && bytes[1] == 0x63 && bytes[2] == 0x00 &&
               bytes[3] == 0x10 && bytes[4] == 0x10;
-          uint8_t swing = 0;
           if (header_ok && bytes[5] == 0x02) {
             id(fujitsu_ardb1_valid) = true;
             id(fujitsu_ardb1_off) = true;
-            id(fujitsu_ardb1_command) = "off";
-          } else if (header_ok && bytes[5] == 0x6D) {
-            id(fujitsu_ardb1_valid) = true;
-            id(fujitsu_ardb1_command) = "swing_toggle";
           } else if (header_ok && usable_bits == 120 && bytes[5] == 0xFC &&
                      bytes[6] == 0x08 && bytes[7] == 0x30) {
             uint8_t checksum = 0;
@@ -156,12 +141,10 @@ remote_receiver:
               const char *fans[] = {"auto", "high", "med", "low", "quiet"};
               const uint8_t mode = bytes[9] & 0x07;
               const uint8_t fan = bytes[10] & 0x07;
-              swing = (bytes[10] >> 4) & 0x03;
               if (mode <= 4 && fan <= 4) {
                 id(fujitsu_ardb1_valid) = true;
                 id(fujitsu_ardb1_mode) = modes[mode];
                 id(fujitsu_ardb1_fan) = fans[fan];
-                id(fujitsu_ardb1_swing_mode) = swing == 1 ? "vertical" : "off";
                 id(fujitsu_ardb1_temperature) = ((bytes[8] >> 2) / 4) + 16;
               }
             }
@@ -169,10 +152,7 @@ remote_receiver:
 
           if (id(fujitsu_ardb1_valid)) {
             id(fujitsu_ardb1_valid_frames)++;
-            if (id(fujitsu_ardb1_command) == "swing_toggle") {
-              id(fujitsu_ardb1_last_decoded).publish_state("vertical swing toggled");
-              ESP_LOGI("FUJITSU_ARDB1", "decoded vertical swing toggle");
-            } else if (id(fujitsu_ardb1_off)) {
+            if (id(fujitsu_ardb1_off)) {
               id(fujitsu_ardb1_off_frames)++;
               id(fujitsu_ardb1_last_decoded).publish_state("off");
               ESP_LOGI("FUJITSU_ARDB1", "decoded OFF");
@@ -180,17 +160,12 @@ remote_receiver:
               id(fujitsu_ardb1_last_decoded).publish_state(
                   id(fujitsu_ardb1_mode) + " / " + id(fujitsu_ardb1_fan) +
                   " / " + std::to_string(id(fujitsu_ardb1_temperature)) + " C");
-              ESP_LOGI("FUJITSU_ARDB1", "decoded mode=%s fan=%s temperature=%d swing=%d",
+              ESP_LOGI("FUJITSU_ARDB1", "decoded mode=%s fan=%s temperature=%d",
                        id(fujitsu_ardb1_mode).c_str(), id(fujitsu_ardb1_fan).c_str(),
-                       id(fujitsu_ardb1_temperature), swing);
+                       id(fujitsu_ardb1_temperature));
             }
           } else if (x.size() >= 98) {
             id(fujitsu_ardb1_rejected_frames)++;
-          }
-
-          if (header_ok && !id(fujitsu_ardb1_valid)) {
-            ESP_LOGI("FUJITSU_ARDB1", "unhandled command=0x%02X (%d bits)",
-                     bytes[5], usable_bits);
           }
 
           if (x.size() < 20) {
@@ -205,9 +180,6 @@ remote_receiver:
           }
 
           id(ir_raw_frame) = raw;
-          if (header_ok && !id(fujitsu_ardb1_valid)) {
-            ESP_LOGI("FUJITSU_ARDB1", "unhandled raw=%s", raw.c_str());
-          }
 
       - if:
           condition:
@@ -220,10 +192,9 @@ remote_receiver:
                   length: !lambda 'return x.size();'
                   protocol: fujitsu_ardb1
                   decoded: !lambda 'return id(fujitsu_ardb1_valid);'
-                  command: !lambda 'return id(fujitsu_ardb1_command);'
+                  command: !lambda 'return id(fujitsu_ardb1_off) ? std::string("off") : std::string("");'
                   mode: !lambda 'return id(fujitsu_ardb1_mode);'
                   fan: !lambda 'return id(fujitsu_ardb1_fan);'
-                  swing_mode: !lambda 'return id(fujitsu_ardb1_swing_mode);'
                   temperature: !lambda 'return id(fujitsu_ardb1_temperature);'
 
 
