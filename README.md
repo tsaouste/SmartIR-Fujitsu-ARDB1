@@ -54,4 +54,5 @@ When using more than one air conditioner, use a unique ESPHome node name and `re
 
 - The `swing_mode` control represents continuous vertical swing. The AR-DB1's separate fixed-louvre-position button is intentionally not exposed because it reports only a relative next position, not an absolute state.
 - The ESPHome diagnostic entities are disabled by default, apart from Wi-Fi signal. They can be enabled from the device page when troubleshooting.
+- The custom integration icon is bundled locally and is shown by Home Assistant 2026.3 or newer.
 - This is a focused fork of [SmartIR](https://github.com/smartHomeHub/SmartIR); its normal device support remains available.
