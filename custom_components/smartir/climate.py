@@ -134,6 +134,7 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
         self._operation_modes = [HVACMode.OFF] + valid_hvac_modes
         self._fan_modes = device_data['fanModes']
         self._swing_modes = device_data.get('swingModes')
+        self._swing_commands = device_data.get('swingCommands', {})
         self._commands = device_data['commands']
         self._receiver_frames = self._build_receiver_frames(self._commands)
 
@@ -370,7 +371,11 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
         self._current_swing_mode = swing_mode
 
         if not self._hvac_mode.lower() == HVACMode.OFF:
-            await self.send_command()
+            swing_command = self._swing_commands.get(swing_mode)
+            if swing_command:
+                await self._controller.send(swing_command)
+            else:
+                await self.send_command()
         self.async_write_ha_state()
 
     async def async_turn_off(self):
@@ -400,7 +405,7 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
                     await self._controller.send(self._commands['on'])
                     await asyncio.sleep(self._delay)
 
-                if self._support_swing == True:
+                if self._support_swing == True and not self._swing_commands:
                     await self._controller.send(
                         self._commands[operation_mode][fan_mode][swing_mode][target_temperature])
                 else:
@@ -497,7 +502,16 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
                 _LOGGER.debug("Rejected incomplete AR-DB1 frame for %s", self.name)
                 return
 
-            if event.data.get('command') == 'off':
+            command = event.data.get('command')
+            if command == 'swing_toggle':
+                if not self._swing_modes:
+                    _LOGGER.warning("Received AR-DB1 swing command for %s without swing modes", self.name)
+                    return
+                self._current_swing_mode = (
+                    'off' if self._current_swing_mode == 'vertical' else 'vertical'
+                )
+                _LOGGER.info("Received AR-DB1 swing toggle for %s: %s", self.name, self._current_swing_mode)
+            elif command == 'off':
                 self._hvac_mode = HVACMode.OFF
                 _LOGGER.info("Received AR-DB1 OFF command for %s", self.name)
             else:
@@ -520,9 +534,12 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
                 self._last_on_operation = mode
                 self._current_fan_mode = fan_mode
                 self._target_temperature = temperature
+                swing_mode = event.data.get('swing_mode')
+                if swing_mode in (self._swing_modes or []):
+                    self._current_swing_mode = swing_mode
                 _LOGGER.info(
-                    "Received AR-DB1 state for %s: mode=%s fan=%s temperature=%s",
-                    self.name, mode, fan_mode, temperature,
+                    "Received AR-DB1 state for %s: mode=%s fan=%s temperature=%s swing=%s",
+                    self.name, mode, fan_mode, temperature, self._current_swing_mode,
                 )
 
             self.async_write_ha_state()
