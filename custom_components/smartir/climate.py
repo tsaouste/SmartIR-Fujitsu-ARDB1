@@ -498,7 +498,8 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
         # checksum.  Do not fall back to fuzzy raw-frame matching for this
         # source: incomplete frames must leave the current state untouched.
         if event.data.get('protocol') == 'fujitsu_ardb1':
-            if not event.data.get('decoded'):
+            decoded = event.data.get('decoded')
+            if decoded is not True and str(decoded).lower() not in ('1', 'true'):
                 _LOGGER.debug("Rejected incomplete AR-DB1 frame for %s", self.name)
                 return
 
@@ -520,8 +521,8 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
                 temperature = event.data.get('temperature')
                 if mode not in self._operation_modes or fan_mode not in self._fan_modes:
                     _LOGGER.warning(
-                        "Received unsupported AR-DB1 state for %s: mode=%s fan=%s payload=%s",
-                        self.name, mode, fan_mode, event.data,
+                        "Received unsupported AR-DB1 state for %s: mode=%s fan=%s",
+                        self.name, mode, fan_mode,
                     )
                     return
                 try:
