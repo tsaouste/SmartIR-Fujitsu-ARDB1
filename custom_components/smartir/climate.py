@@ -520,8 +520,8 @@ class SmartIRClimate(ClimateEntity, RestoreEntity):
                 temperature = event.data.get('temperature')
                 if mode not in self._operation_modes or fan_mode not in self._fan_modes:
                     _LOGGER.warning(
-                        "Received unsupported AR-DB1 state for %s: mode=%s fan=%s",
-                        self.name, mode, fan_mode,
+                        "Received unsupported AR-DB1 state for %s: mode=%s fan=%s payload=%s",
+                        self.name, mode, fan_mode, event.data,
                     )
                     return
                 try:
